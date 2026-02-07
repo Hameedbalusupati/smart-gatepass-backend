@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
@@ -17,11 +17,14 @@ from routes.notification_routes import notifications_bp
 
 def create_app():
     app = Flask(__name__)
+
+    # ------------------ CONFIG ------------------
     app.config.from_object(Config)
 
-    # ==========================
-    # CORS (CORRECT)
-    # ==========================
+    # 🔍 HARD DEBUG (remove later)
+    print("SQLALCHEMY_DATABASE_URI ->", app.config.get("SQLALCHEMY_DATABASE_URI"))
+
+    # ------------------ CORS ------------------
     CORS(
         app,
         resources={r"/api/*": {"origins": "*"}},
@@ -29,15 +32,15 @@ def create_app():
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     )
 
-    # ==========================
-    # EXTENSIONS
-    # ==========================
+    # ------------------ EXTENSIONS ------------------
     db.init_app(app)
     JWTManager(app)
 
-    # ==========================
-    # BLUEPRINTS
-    # ==========================
+    # ------------------ DB INIT ------------------
+    with app.app_context():
+        db.create_all()
+
+    # ------------------ BLUEPRINTS ------------------
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(gatepass_bp, url_prefix="/api/gatepass")
     app.register_blueprint(student_bp, url_prefix="/api/student")
@@ -46,21 +49,30 @@ def create_app():
     app.register_blueprint(security_bp, url_prefix="/api/security")
     app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
 
-    # ==========================
-    # HEALTH CHECK
-    # ==========================
+    # ------------------ HEALTH ------------------
     @app.route("/", methods=["GET"])
     def home():
-        return {"status": "Smart Gatepass Backend Running"}, 200
+        return jsonify({
+            "status": "Smart Gatepass Backend Running",
+            "database": "PostgreSQL Connected",
+            "jwt": "Enabled",
+            "modules": [
+                "auth",
+                "gatepass",
+                "student",
+                "faculty",
+                "hod",
+                "security",
+                "notifications",
+            ],
+        })
 
     return app
 
 
-# ==========================
-# RENDER ENTRY POINT
-# ==========================
+# ------------------ ENTRY POINT ------------------
 app = create_app()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)

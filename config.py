@@ -1,6 +1,9 @@
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
 
+# 🔑 THIS IS THE FIX
+load_dotenv()
 
 class Config:
     # ================= CORE SECURITY =================
@@ -18,11 +21,14 @@ class Config:
     # ================= QR SECURITY =================
     QR_SECRET_KEY = os.getenv("QR_SECRET_KEY", "smartgatepass_qr_secret")
 
-    # ================= DATABASE (RENDER FIX) =================
+    # ================= DATABASE (LOCAL + RENDER) =================
     db_url = os.getenv("DATABASE_URL")
 
-    # Fix for Render sometimes giving `postgres://`
-    if db_url and db_url.startswith("postgres://"):
+    if not db_url:
+        raise RuntimeError("DATABASE_URL not set. Check your .env file")
+
+    # Fix Render postgres:// issue
+    if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     SQLALCHEMY_DATABASE_URI = db_url
