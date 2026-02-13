@@ -1,18 +1,27 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+
 from models import User, GatePass
 
+# =================================================
+# BLUEPRINT (NO url_prefix, NO CORS HERE)
+# =================================================
 student_bp = Blueprint("student_bp", __name__)
 
-
 # =================================================
-# STUDENT PROFILE
+# STUDENT PROFILE (DASHBOARD HEADER)
 # =================================================
 @student_bp.route("/profile", methods=["GET"])
 @jwt_required()
 def profile():
+    try:
+        student_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False,
+            "message": "Invalid or expired token"
+        }), 401
 
-    student_id = int(get_jwt_identity())
     student = User.query.get(student_id)
 
     if not student or student.role != "student":
@@ -28,8 +37,7 @@ def profile():
             "college_id": student.college_id,
             "department": student.department,
             "year": student.year,
-            "section": student.section,
-            "photo": student.photo
+            "section": student.section
         }
     }), 200
 
@@ -40,8 +48,14 @@ def profile():
 @student_bp.route("/status", methods=["GET"])
 @jwt_required()
 def student_status():
+    try:
+        student_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False,
+            "message": "Invalid or expired token"
+        }), 401
 
-    student_id = int(get_jwt_identity())
     student = User.query.get(student_id)
 
     if not student or student.role != "student":
@@ -65,8 +79,9 @@ def student_status():
                 "reason": gp.reason,
                 "status": gp.status,
                 "created_at": gp.created_at.isoformat(),
-                "is_used": gp.is_used,
-                "qr_token": gp.qr_token if gp.status == "PendingSecurity" else None
+
+                # QR is visible ONLY after HOD approval
+                "qr_token": gp.qr_token if gp.status in ["PendingSecurity", "Out"] else None
             }
             for gp in gatepasses
         ]
