@@ -92,7 +92,6 @@
 
 
 
-
 from flask import Blueprint, jsonify
 from datetime import datetime
 import jwt
@@ -113,9 +112,10 @@ QR_ALGORITHM = "HS256"
 # =================================================
 @security_bp.route("/scan/<string:qr_token>", methods=["GET"])
 def scan_qr(qr_token):
+
     try:
         # =========================
-        # DECODE QR TOKEN
+        # VERIFY JWT QR TOKEN
         # =========================
         decoded = jwt.decode(
             qr_token,
@@ -124,6 +124,7 @@ def scan_qr(qr_token):
         )
 
         gatepass_id = decoded.get("gatepass_id")
+
         if not gatepass_id:
             return jsonify({
                 "success": False,
@@ -131,6 +132,7 @@ def scan_qr(qr_token):
             }), 400
 
         gatepass = GatePass.query.get(gatepass_id)
+
         if not gatepass:
             return jsonify({
                 "success": False,
@@ -138,7 +140,7 @@ def scan_qr(qr_token):
             }), 404
 
         # =========================
-        # CHECK ALREADY USED
+        # CHECK IF ALREADY USED
         # =========================
         if gatepass.is_used:
             return jsonify({
@@ -149,14 +151,14 @@ def scan_qr(qr_token):
         # =========================
         # CHECK STATUS
         # =========================
-        if gatepass.status != "PendingSecurity":
+        if gatepass.status != "Approved":
             return jsonify({
                 "success": False,
                 "message": "Gatepass not valid"
             }), 400
 
         # =========================
-        # MARK AS USED
+        # MARK AS COMPLETED
         # =========================
         gatepass.is_used = True
         gatepass.used_at = datetime.utcnow()
@@ -169,7 +171,6 @@ def scan_qr(qr_token):
 
         return jsonify({
             "success": True,
-            "action": "OUT",
             "student_name": student.name,
             "college_id": student.college_id,
             "department": student.department,
@@ -177,31 +178,21 @@ def scan_qr(qr_token):
             "section": student.section,
             "reason": gatepass.reason,
             "parent_mobile": gatepass.parent_mobile,
-            "photo": student.photo,
             "time": gatepass.out_time.isoformat()
         }), 200
 
-    # =========================
-    # QR EXPIRED
-    # =========================
     except jwt.ExpiredSignatureError:
         return jsonify({
             "success": False,
             "message": "QR Code expired"
         }), 410
 
-    # =========================
-    # INVALID TOKEN
-    # =========================
     except jwt.InvalidTokenError:
         return jsonify({
             "success": False,
             "message": "Invalid QR Code"
         }), 400
 
-    # =========================
-    # UNKNOWN ERROR
-    # =========================
     except Exception as e:
         print("QR SCAN ERROR:", e)
         return jsonify({

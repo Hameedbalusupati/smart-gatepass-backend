@@ -95,7 +95,6 @@
 
 
 
-
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import User, GatePass
@@ -126,14 +125,13 @@ def profile():
             "college_id": student.college_id,
             "department": student.department,
             "year": student.year,
-            "section": student.section,
-            "photo": student.photo
+            "section": student.section
         }
     }), 200
 
 
 # =================================================
-# STUDENT GATEPASS STATUS
+# STUDENT GATEPASS STATUS / HISTORY
 # =================================================
 @student_bp.route("/status", methods=["GET"])
 @jwt_required()
@@ -164,7 +162,9 @@ def student_status():
                 "status": gp.status,
                 "created_at": gp.created_at.isoformat(),
                 "is_used": gp.is_used,
-                "qr_token": gp.qr_token if gp.status == "PendingSecurity" else None
+
+                # QR visible only when approved and not used
+                "qr_token": gp.qr_token if gp.status == "Approved" else None
             }
             for gp in gatepasses
         ]

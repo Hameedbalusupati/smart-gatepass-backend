@@ -175,6 +175,7 @@ QR_ALGORITHM = "HS256"
 @hod_bp.route("/gatepasses/pending", methods=["GET"])
 @jwt_required()
 def hod_pending():
+
     hod_id = get_jwt_identity()
     hod = User.query.get(int(hod_id))
 
@@ -222,7 +223,7 @@ def hod_pending():
 
 
 # =====================================================
-# APPROVE GATEPASS → FORWARD TO SECURITY + GENERATE QR
+# APPROVE GATEPASS → GENERATE QR FOR STUDENT
 # =====================================================
 @hod_bp.route("/gatepasses/approve/<int:gatepass_id>", methods=["PUT"])
 @jwt_required()
@@ -245,19 +246,19 @@ def hod_approve(gatepass_id):
             "message": "Gatepass not ready for approval"
         }), 400
 
-    # =====================================================
-    # UPDATE STATUS
-    # =====================================================
-    gp.status = "PendingSecurity"
+    # =========================
+    # UPDATE STATUS TO APPROVED
+    # =========================
+    gp.status = "Approved"
     gp.hod_id = hod.id
 
-    # Reset usage tracking
+    # Reset usage flags
     gp.is_used = False
     gp.used_at = None
 
-    # =====================================================
+    # =========================
     # GENERATE QR TOKEN (10 MIN VALID)
-    # =====================================================
+    # =========================
     expiry_time = datetime.utcnow() + timedelta(minutes=10)
 
     qr_payload = {
@@ -272,18 +273,16 @@ def hod_approve(gatepass_id):
         algorithm=QR_ALGORITHM
     )
 
-    gp.qr_expires_at = expiry_time
-
     db.session.commit()
 
     return jsonify({
         "success": True,
-        "message": "Gatepass approved and forwarded to security"
+        "message": "Gatepass approved. QR generated for student."
     }), 200
 
 
 # =====================================================
-# REJECT GATEPASS (HOD)
+# REJECT GATEPASS
 # =====================================================
 @hod_bp.route("/gatepasses/reject/<int:gatepass_id>", methods=["PUT"])
 @jwt_required()
