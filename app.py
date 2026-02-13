@@ -14,29 +14,26 @@ from routes.hod_routes import hod_bp
 from routes.security_routes import security_bp
 
 
-# =========================================================
-# CREATE APPLICATION
-# =========================================================
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # ------------------- CORS -------------------
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": "*"}},
-        supports_credentials=True
-    )
+    # CORS
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
-    # ------------------- EXTENSIONS -------------------
+    # Extensions
     db.init_app(app)
     JWTManager(app)
 
-    # ------------------- CREATE TABLES -------------------
+    # Safe DB connection test
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+            print("✅ Database Connected Successfully")
+        except Exception as e:
+            print("❌ Database Connection Failed:", e)
 
-    # ------------------- REGISTER BLUEPRINTS -------------------
+    # Blueprints
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(gatepass_bp, url_prefix="/api/gatepass")
     app.register_blueprint(student_bp, url_prefix="/api/student")
@@ -44,7 +41,6 @@ def create_app():
     app.register_blueprint(hod_bp, url_prefix="/api/hod")
     app.register_blueprint(security_bp, url_prefix="/api/security")
 
-    # ------------------- HEALTH CHECK -------------------
     @app.route("/")
     def health():
         return jsonify({
@@ -56,15 +52,8 @@ def create_app():
     return app
 
 
-# =========================================================
-# GUNICORN ENTRY (IMPORTANT FOR RENDER)
-# =========================================================
 app = create_app()
 
-
-# =========================================================
-# LOCAL RUN
-# =========================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
