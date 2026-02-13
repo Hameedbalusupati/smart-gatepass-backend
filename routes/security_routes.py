@@ -6,19 +6,22 @@ from models import db, GatePass, User
 from config import Config
 
 # =================================================
-# BLUEPRINT (NO url_prefix, NO CORS HERE)
+# BLUEPRINT
 # =================================================
 security_bp = Blueprint("security_bp", __name__)
 
 QR_ALGORITHM = "HS256"
 
+
 # =================================================
-# SCAN QR CODE (SECURITY – ONE-TIME USE)
+# SCAN QR CODE (ONE-TIME USE)
 # =================================================
 @security_bp.route("/scan/<string:qr_token>", methods=["GET"])
 def scan_qr(qr_token):
     try:
-        # 🔐 DECODE QR TOKEN
+        # =========================
+        # DECODE QR TOKEN
+        # =========================
         decoded = jwt.decode(
             qr_token,
             Config.QR_SECRET_KEY,
@@ -39,48 +42,71 @@ def scan_qr(qr_token):
                 "message": "Gatepass not found"
             }), 404
 
-        # 🔒 VALIDATE STATUS (MUST BE APPROVED)
-        if gatepass.status != "PendingSecurity":
+        # =========================
+        # CHECK ALREADY USED
+        # =========================
+        if gatepass.is_used:
             return jsonify({
                 "success": False,
-                "message": "Gatepass not valid for exit"
+                "message": "QR already used"
             }), 400
 
         # =========================
-        # MARK STUDENT AS OUT
+        # CHECK STATUS
         # =========================
-        gatepass.status = "Out"
+        if gatepass.status != "PendingSecurity":
+            return jsonify({
+                "success": False,
+                "message": "Gatepass not valid"
+            }), 400
+
+        # =========================
+        # MARK AS USED
+        # =========================
+        gatepass.is_used = True
+        gatepass.used_at = datetime.utcnow()
+        gatepass.status = "Completed"
         gatepass.out_time = datetime.utcnow()
+
         db.session.commit()
 
-        student = User.query.get(gatepass.student_id)
+        student = gatepass.student
 
         return jsonify({
             "success": True,
             "action": "OUT",
-            "student_name": student.name if student else None,
-            "college_id": student.college_id if student else None,
-            "department": student.department if student else None,
+            "student_name": student.name,
+            "college_id": student.college_id,
+            "department": student.department,
+            "year": student.year,
+            "section": student.section,
             "reason": gatepass.reason,
             "parent_mobile": gatepass.parent_mobile,
+            "photo": student.photo,
             "time": gatepass.out_time.isoformat()
         }), 200
 
-    # ⛔ QR EXPIRED
+    # =========================
+    # QR EXPIRED
+    # =========================
     except jwt.ExpiredSignatureError:
         return jsonify({
             "success": False,
             "message": "QR Code expired"
         }), 410
 
-    # ⛔ INVALID QR
+    # =========================
+    # INVALID TOKEN
+    # =========================
     except jwt.InvalidTokenError:
         return jsonify({
             "success": False,
             "message": "Invalid QR Code"
         }), 400
 
-    # ⛔ UNKNOWN ERROR
+    # =========================
+    # UNKNOWN ERROR
+    # =========================
     except Exception as e:
         print("QR SCAN ERROR:", e)
         return jsonify({

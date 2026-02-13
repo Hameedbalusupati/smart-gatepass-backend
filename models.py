@@ -24,6 +24,9 @@ class User(db.Model):
     year = db.Column(db.Integer, nullable=True)
     section = db.Column(db.String(2), nullable=True)
 
+    # 🔥 Student photo (Base64 image)
+    photo = db.Column(db.Text, nullable=True)
+
     # ================= RELATIONSHIPS =================
     student_gatepasses = db.relationship(
         "GatePass",
@@ -88,8 +91,14 @@ class GatePass(db.Model):
         index=True
     )
 
+    # ================= QR SYSTEM =================
     qr_token = db.Column(db.Text, nullable=True)
 
+    # 🔥 NEW → To prevent reuse
+    is_used = db.Column(db.Boolean, default=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+
+    # Optional entry/exit tracking
     out_time = db.Column(db.DateTime, nullable=True)
     in_time = db.Column(db.DateTime, nullable=True)
 
