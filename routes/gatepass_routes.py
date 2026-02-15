@@ -6,9 +6,10 @@ from sqlalchemy import and_
 from models import db, GatePass, User
 
 # =================================================
-# BLUEPRINT (NO url_prefix, NO CORS HERE)
+# BLUEPRINT
 # =================================================
 gatepass_bp = Blueprint("gatepass_bp", __name__)
+
 
 # =================================================
 # APPLY GATEPASS (STUDENT)
@@ -16,8 +17,16 @@ gatepass_bp = Blueprint("gatepass_bp", __name__)
 @gatepass_bp.route("/apply", methods=["POST"])
 @jwt_required()
 def apply_gatepass():
-    student_id = get_jwt_identity()
-    student = User.query.get(int(student_id))
+
+    try:
+        student_id = int(get_jwt_identity())
+    except:
+        return jsonify({
+            "success": False,
+            "message": "Invalid token"
+        }), 401
+
+    student = db.session.get(User, student_id)
 
     if not student:
         return jsonify({
@@ -32,8 +41,13 @@ def apply_gatepass():
         }), 403
 
     data = request.get_json(silent=True) or {}
+
     reason = (data.get("reason") or "").strip()
-    parent_mobile = (data.get("parent_mobile") or data.get("parentMobile") or "").strip()
+    parent_mobile = (
+        data.get("parent_mobile")
+        or data.get("parentMobile")
+        or ""
+    ).strip()
 
     if not reason or not parent_mobile:
         return jsonify({
@@ -42,7 +56,7 @@ def apply_gatepass():
         }), 400
 
     # =================================================
-    # ONE GATEPASS PER DAY (UTC SAFE)
+    # ONE GATEPASS PER DAY
     # =================================================
     start_today = datetime.utcnow().replace(
         hour=0, minute=0, second=0, microsecond=0
@@ -57,7 +71,6 @@ def apply_gatepass():
             GatePass.status.in_([
                 "PendingFaculty",
                 "PendingHOD",
-                "PendingSecurity",
                 "Approved"
             ])
         )
@@ -69,15 +82,21 @@ def apply_gatepass():
             "message": "You can apply only one gatepass per day"
         }), 400
 
-    gp = GatePass(
+    # =================================================
+    # CREATE GATEPASS
+    # =================================================
+    new_gp = GatePass(
         student_id=student.id,
         reason=reason,
         parent_mobile=parent_mobile,
         status="PendingFaculty",
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
+        is_used=False,
+        used_at=None,
+        qr_token=None
     )
 
-    db.session.add(gp)
+    db.session.add(new_gp)
     db.session.commit()
 
     return jsonify({
@@ -92,8 +111,16 @@ def apply_gatepass():
 @gatepass_bp.route("/my_gatepasses", methods=["GET"])
 @jwt_required()
 def my_gatepasses():
-    student_id = get_jwt_identity()
-    student = User.query.get(int(student_id))
+
+    try:
+        student_id = int(get_jwt_identity())
+    except:
+        return jsonify({
+            "success": False,
+            "message": "Invalid token"
+        }), 401
+
+    student = db.session.get(User, student_id)
 
     if not student or student.role != "student":
         return jsonify({
@@ -117,7 +144,12 @@ def my_gatepasses():
                 "status": g.status,
                 "parent_mobile": g.parent_mobile,
                 "created_at": g.created_at.isoformat(),
-                "qr_token": g.qr_token if g.status == "Approved" else None
+                "is_used": g.is_used,
+                "qr_token": (
+                    g.qr_token
+                    if g.status == "Approved" and not g.is_used
+                    else None
+                )
             }
             for g in gatepasses
         ]
