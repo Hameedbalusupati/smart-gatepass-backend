@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import User, GatePass
+from models import db, User, GatePass
 
 student_bp = Blueprint("student_bp", __name__)
 
@@ -12,8 +12,15 @@ student_bp = Blueprint("student_bp", __name__)
 @jwt_required()
 def profile():
 
-    student_id = int(get_jwt_identity())
-    student = User.query.get(student_id)
+    try:
+        student_id = int(get_jwt_identity())
+    except:
+        return jsonify({
+            "success": False,
+            "message": "Invalid token"
+        }), 401
+
+    student = db.session.get(User, student_id)
 
     if not student or student.role != "student":
         return jsonify({
@@ -40,8 +47,15 @@ def profile():
 @jwt_required()
 def student_status():
 
-    student_id = int(get_jwt_identity())
-    student = User.query.get(student_id)
+    try:
+        student_id = int(get_jwt_identity())
+    except:
+        return jsonify({
+            "success": False,
+            "message": "Invalid token"
+        }), 401
+
+    student = db.session.get(User, student_id)
 
     if not student or student.role != "student":
         return jsonify({
@@ -66,8 +80,14 @@ def student_status():
                 "created_at": gp.created_at.isoformat(),
                 "is_used": gp.is_used,
 
-                # QR visible only when approved and not used
-                "qr_token": gp.qr_token if gp.status == "Approved" else None
+                # ✅ QR visible ONLY if:
+                # 1. HOD approved (status == Approved)
+                # 2. QR not used
+                "qr_token": (
+                    gp.qr_token
+                    if gp.status == "Approved" and not gp.is_used
+                    else None
+                )
             }
             for gp in gatepasses
         ]
